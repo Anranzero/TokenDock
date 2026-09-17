@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>TokenDock</RootNamespace>
+    <AssemblyName>TokenDock</AssemblyName>
+    <AssemblyTitle>TokenDock · AI 用量助手</AssemblyTitle>
+    <Product>TokenDock · AI 用量助手</Product>
+    <Description>AI 用量助手：套餐余量与 Token 统计（OpenCode Go / Codex），免安装绿色版</Description>
+    <ApplicationIcon>..\..\TokenDock.ico</ApplicationIcon>
+    <Version>2.2.1</Version>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <SatelliteResourceLanguages>zh-Hans;en</SatelliteResourceLanguages>
+    <ApplicationIcon>..\..\TokenDock.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+    <!-- 只读读取本机 OpenCode 会话库（SQLite）；原生库随单文件打包 -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 单元测试程序集可访问内部实现（调色板 / 外观存储 / 窗口效果探测） -->
+    <InternalsVisibleTo Include="TokenDock.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 托盘图标运行时从嵌入资源加载（多尺寸 ICO） -->
+    <EmbeddedResource Include="..\..\TokenDock.ico" LogicalName="TokenDock.TokenDock.ico" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,13 @@
+# 构建产物
+bin/
+obj/
+dist/
+
+# IDE
+.vs/
+*.user
+
+# 本工具的密钥存储在 %APPDATA%\OpenCodeGoAssistant\，不在仓库内；
+# 严禁把任何 API 密钥文件提交到 Git。
+apikey.bin
+*.bin
