@@ -27,8 +27,10 @@ TokenDock 的 Android 端：原生 Kotlin + Jetpack Compose（**不使用 WebVie
 ## 环境要求
 
 - Android Studio（Koala 或更新）/ 或命令行 + JDK 17
-- Android SDK Platform 34、Build-Tools 34+
-- Gradle 由 wrapper 自动下载（8.9）
+- Android SDK Platform 36、Build-Tools 36.1.0（`app/build.gradle.kts` 已显式指定）
+- Gradle 由 wrapper 自动下载（8.11.1）
+
+工具链版本：AGP 8.9.2 · Kotlin 2.0.21 · Compose BOM 2024.12.01 · compileSdk 36 / targetSdk 36 / minSdk 28
 
 ## 构建
 
@@ -110,7 +112,7 @@ android/app/src/main/java/com/tokendock/app/
 
 ## 已知限制
 
-- **targetSdk 34**：本机 SDK 现有 Platform 34，AGP 8.7.3 要求 Gradle 8.9；如需 targetSdk 36（Android 16），需安装 Platform 36 并升级 AGP 至 8.9+（`compileSdk = 36; targetSdk = 36`）。
 - 后台刷新受 WorkManager 最小 15 分钟周期限制，无法做到分钟级；分钟级刷新仅在前台。
 - 窗口背景模糊（毛玻璃）在部分 OEM 系统/低内存设备上不可用，此时自动降级为半透明卡片。
 - Token 明细、Codex / GLM 页签为后续版本内容（当前版本聚焦 OpenCode Go）。
+- Release 构建默认未签名（`app-release-unsigned.apk`），正式分发需按上文配置 keystore。
