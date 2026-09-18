@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 应用图标前景：TokenDock 蓝青配色 + 简化"仪表盘"造型 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 仪表盘外圈 -->
+    <path
+        android:fillColor="#22D3EE"
+        android:pathData="M54,30a24,24 0 1,0 0.01,0z" />
+    <path
+        android:fillColor="#0E2A33"
+        android:pathData="M54,36a18,18 0 1,0 0.01,0z" />
+
+    <!-- 指针 -->
+    <path
+        android:fillColor="#22D3EE"
+        android:pathData="M52.5,54 L54,40 L55.5,54 Z" />
+
+    <!-- 底部横条（余量刻度） -->
+    <path
+        android:fillColor="#0EA5B7"
+        android:pathData="M34,74h40v6h-40z" />
+</vector>

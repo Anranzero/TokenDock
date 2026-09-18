@@ -8,6 +8,8 @@ Windows 10/11 x64 **免安装绿色 EXE**。常驻系统托盘，统一展示多
 
 使用 C# + WinForms + .NET 8 **自包含单文件发布**：双击运行，无需安装 .NET 运行时、浏览器或 Node.js。
 
+> **Android 端**：同仓库 [`android/`](android/README.md) 为原生 Kotlin + Jetpack Compose 应用（不使用 WebView），当前版本聚焦 OpenCode Go：官方额度三卡片、低余量通知、桌面小组件、Keystore 加密密钥；构建与签名方式见 [android/README.md](android/README.md)。
+
 > **改名说明（v2.0.0）**：本程序原名「OpenCode Go 余量助手」，自 v2.0.0 起更名为 **TokenDock · AI 用量助手**（程序集/进程名 `TokenDock`）。首次运行会自动把 `%APPDATA%\OpenCodeGoAssistant` 迁移为 `%APPDATA%\TokenDock`，已保存的 API 密钥与设置平滑延续。
 
 ## 界面与外观（v2.1.0）

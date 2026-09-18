@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">TokenDock</string>
+    <string name="widget_label">TokenDock 余量</string>
+    <string name="widget_description">显示 5 小时 / 本周剩余与下次重置时间</string>
+</resources>
