@@ -259,21 +259,24 @@ internal static class UiPreview
             {
                 new GlmQuotaLimit
                 {
-                    Type = "TOKENS_LIMIT",
+                    Type = "CREDIT_LIMIT",
                     Unit = 3,
                     Number = 5,
-                    Usage = 42,
-                    Remaining = 58,
-                    Percentage = 42,
+                    Usage = 2000,
+                    CurrentValue = 814,
+                    Remaining = 1185,
+                    Percentage = 40,
                     NextResetTime = now.AddHours(3).AddMinutes(12),
                 },
                 new GlmQuotaLimit
                 {
-                    Type = "TOKENS_LIMIT",
+                    Type = "CREDIT_LIMIT",
                     Unit = 6,
-                    Usage = 21,
-                    Remaining = 79,
-                    Percentage = 21,
+                    Number = 1,
+                    Usage = 10000,
+                    CurrentValue = 4824,
+                    Remaining = 5175,
+                    Percentage = 48,
                     NextResetTime = now.AddDays(4).AddHours(6),
                 },
                 new GlmQuotaLimit
@@ -281,7 +284,8 @@ internal static class UiPreview
                     Type = "TIME_LIMIT",
                     Unit = 5,
                     Number = 1,
-                    Usage = 136,
+                    Usage = 1000,
+                    CurrentValue = 136,
                     Remaining = 864,
                     Percentage = 13.6,
                     NextResetTime = now.AddDays(18),

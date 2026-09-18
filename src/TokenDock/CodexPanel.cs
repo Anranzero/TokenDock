@@ -72,9 +72,35 @@ internal sealed class SegmentedControl : Control
     private int HitTest(int x)
     {
         if (_items.Length == 0) return -1;
-        var width = (float)Width / _items.Length;
-        var index = (int)(x / width);
-        return index >= 0 && index < _items.Length ? index : -1;
+        var widths = SegmentWidths();
+        float acc = 0;
+        for (var i = 0; i < widths.Length; i++)
+        {
+            acc += widths[i];
+            if (x < acc) return i;
+        }
+
+        return -1;
+    }
+
+    /// <summary>按文字实测宽度分配段宽（等比缩放填满总宽），短文字不再留大片空档。</summary>
+    private float[] SegmentWidths()
+    {
+        var widths = new float[_items.Length];
+        float total = 0;
+        for (var i = 0; i < _items.Length; i++)
+        {
+            widths[i] = Math.Max(TextRenderer.MeasureText(_items[i], Font).Width + UiTheme.Px(24), UiTheme.Px(48));
+            total += widths[i];
+        }
+
+        if (Width > 0 && total > 0)
+        {
+            var scale = Width / total;
+            for (var i = 0; i < widths.Length; i++) widths[i] *= scale;
+        }
+
+        return widths;
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -88,10 +114,11 @@ internal sealed class SegmentedControl : Control
             g.FillPath(trackBrush, track);
         }
 
-        var segmentWidth = (float)Width / _items.Length;
+        var widths = SegmentWidths();
+        var x = 0f;
         for (var i = 0; i < _items.Length; i++)
         {
-            var bounds = new RectangleF(i * segmentWidth + 2f, 2f, segmentWidth - 4f, Height - 4f);
+            var bounds = new RectangleF(x + 2f, 2f, widths[i] - 4f, Height - 4f);
             if (i == _selected)
             {
                 using var selected = UiTheme.RoundedRect(bounds, radius - 2f);
@@ -104,6 +131,7 @@ internal sealed class SegmentedControl : Control
             var color = i == _selected ? UiTheme.TextPrimary : i == _hover ? UiTheme.TextPrimary : UiTheme.TextSecondary;
             TextRenderer.DrawText(g, _items[i], Font, Rectangle.Round(bounds), color,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
+            x += widths[i];
         }
     }
 }

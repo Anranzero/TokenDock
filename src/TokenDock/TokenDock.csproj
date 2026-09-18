@@ -12,7 +12,7 @@
     <Product>TokenDock · AI 用量助手</Product>
     <Description>AI 用量助手：套餐余量与 Token 统计（OpenCode Go / Codex），免安装绿色版</Description>
     <ApplicationIcon>..\..\TokenDock.ico</ApplicationIcon>
-    <Version>2.2.2</Version>
+    <Version>2.2.3</Version>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <SatelliteResourceLanguages>zh-Hans;en</SatelliteResourceLanguages>
     <ApplicationIcon>..\..\TokenDock.ico</ApplicationIcon>
