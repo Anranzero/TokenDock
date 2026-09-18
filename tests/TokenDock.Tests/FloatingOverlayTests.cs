@@ -1,0 +1,184 @@
+using Xunit;
+
+namespace TokenDock.Tests;
+
+/// <summary>悬浮窗模型组装测试：三个订阅的行/倒计时、异常态提示、设置持久化与透明度收敛。</summary>
+public class FloatingOverlayTests
+{
+    private const string OpenCodeJson = """
+    {"usage":{"rolling":{"percent":40,"resetsAt":"2026-09-17T23:28:00Z"},
+    "weekly":{"percent":10,"resetsAt":"2026-09-21T00:00:00Z"},"monthly":{"percent":5}}}
+    """;
+
+    private static GlmState GlmStateWithData()
+    {
+        var state = new GlmState();
+        state.Apply(GlmFetchResult.Ok(new GlmUsageData
+        {
+            Provider = GlmProvider.BigModel,
+            Level = "lite",
+            Limits = new[]
+            {
+                new GlmQuotaLimit { Type = "CREDIT_LIMIT", Unit = 3, Number = 5, Usage = 2000, CurrentValue = 814, Remaining = 1185, Percentage = 40, NextResetTime = DateTimeOffset.UtcNow.AddHours(3) },
+                new GlmQuotaLimit { Type = "CREDIT_LIMIT", Unit = 6, Number = 1, Usage = 10000, CurrentValue = 4824, Remaining = 5175, Percentage = 48, NextResetTime = DateTimeOffset.UtcNow.AddDays(4) },
+            },
+            TotalTokens = 742_540_978,
+            TotalMcpCallCount = 12,
+        }));
+        return state;
+    }
+
+    [Fact]
+    public void Compose_OpenCode_ShowsFiveHourAndWeekly()
+    {
+        var state = new AppState();
+        state.Apply(UsageApiClient.ParseSuccessBody(OpenCodeJson));
+        var model = FloatingOverlayModel.Compose(OverlaySubscription.OpenCodeGo, state, null, null);
+
+        Assert.True(model.HasData);
+        Assert.Equal("OpenCode Go", model.Title);
+        Assert.Equal(2, model.Rows.Count);
+        Assert.Equal("5小时剩余", model.Rows[0].Label);
+        Assert.Equal(60, model.Rows[0].Percent!.Value, 1);
+        Assert.Equal("每周剩余", model.Rows[1].Label);
+        Assert.Equal(90, model.Rows[1].Percent!.Value, 1);
+        // 最近重置 = 5 小时窗口（早于每周）
+        Assert.NotNull(model.Countdown);
+    }
+
+    [Fact]
+    public void Compose_OpenCode_WithoutData_ShowsHintNotZero()
+    {
+        var state = new AppState();
+        state.Apply(FetchResult.Fail(FetchFailureKind.NotConfigured, "尚未设置 API 密钥"));
+        var model = FloatingOverlayModel.Compose(OverlaySubscription.OpenCodeGo, state, null, null);
+
+        Assert.False(model.HasData);
+        Assert.Empty(model.Rows);
+        Assert.Contains("尚未设置", model.Hint);
+    }
+
+    [Fact]
+    public void Compose_Codex_PicksPrimaryAndWeeklyWindows()
+    {
+        var state = new CodexState();
+        var snapshot = new CodexRateLimitsSnapshot
+        {
+            Groups = new[]
+            {
+                new CodexRateGroup
+                {
+                    LimitId = "codex",
+                    Primary = new CodexRateWindow { UsedPercent = 30, WindowDurationMins = 300, ResetsAtUnixSeconds = 1789658904 },
+                },
+                new CodexRateGroup
+                {
+                    LimitId = "codex_bengalfox",
+                    LimitName = "GPT-5.3-Codex-Spark",
+                    Primary = new CodexRateWindow { UsedPercent = 10, WindowDurationMins = 10080, ResetsAtUnixSeconds = 1790183449 },
+                },
+            },
+        };
+        CodexStatePolicy.ApplySnapshot(state, new CodexAccountInfo { LoggedIn = true, Email = "user@example.com" }, snapshot);
+
+        var model = FloatingOverlayModel.Compose(OverlaySubscription.Codex, null, state, null);
+        Assert.True(model.HasData);
+        Assert.Equal(2, model.Rows.Count);
+        Assert.Contains("5小时", model.Rows[0].Label);
+        Assert.Equal(70, model.Rows[0].Percent!.Value, 1);
+        Assert.Contains("7天", model.Rows[1].Label);
+        // 展开信息：2 个窗口行 + 账号行 + 更新时间
+        Assert.Equal(2, model.Details.Count(d => d.Contains("：") && d.Contains("%")));
+        Assert.Contains(model.Details, d => d.Contains("user@example.com"));
+    }
+
+    [Fact]
+    public void Compose_Codex_NotLoggedIn_ShowsHint()
+    {
+        var state = new CodexState();
+        CodexStatePolicy.ApplyNotInstalled(state);
+        var model = FloatingOverlayModel.Compose(OverlaySubscription.Codex, null, state, null);
+
+        Assert.False(model.HasData);
+        Assert.Contains("Codex", model.Hint);
+    }
+
+    [Fact]
+    public void Compose_Glm_ShowsMappedLimits_TotalTokens_AndMcpCalls()
+    {
+        var state = GlmStateWithData();
+        var model = FloatingOverlayModel.Compose(OverlaySubscription.Glm, null, null, state);
+
+        Assert.True(model.HasData);
+        Assert.Equal(2, model.Rows.Count);
+        Assert.Equal("5小时剩余", model.Rows[0].Label);
+        Assert.Equal(59.25, model.Rows[0].Percent!.Value, 1); // 1185 / 2000
+        Assert.Equal("每周剩余", model.Rows[1].Label);
+        Assert.Equal(51.75, model.Rows[1].Percent!.Value, 2); // 5175 / 10000
+        Assert.Contains("总 Token：742.5M", model.Details);
+        Assert.Contains(model.Details, d => d.Contains("MCP 调用：12 次"));
+    }
+
+    [Fact]
+    public void Compose_Glm_WithoutData_ShowsHintNotZero()
+    {
+        var state = new GlmState();
+        state.Apply(GlmFetchResult.Fail(FetchFailureKind.NotConfigured, "尚未设置密钥"));
+        var model = FloatingOverlayModel.Compose(OverlaySubscription.Glm, null, null, state);
+
+        Assert.False(model.HasData);
+        Assert.Null(model.Countdown);
+        Assert.Contains("尚未配置", model.Hint);
+    }
+
+    [Fact]
+    public void Settings_RoundTripKeepsAllFields()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "opencode-tests", "floating-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var settings = new FloatingOverlaySettings
+            {
+                Subscription = OverlaySubscription.Glm,
+                Enabled = true,
+                Locked = true,
+                Opacity = 0.75,
+                X = 1920,
+                Y = 1040,
+            };
+            FloatingOverlayStore.SaveTo(settings, path);
+            var loaded = FloatingOverlayStore.LoadFrom(path);
+
+            Assert.Equal(OverlaySubscription.Glm, loaded.Subscription);
+            Assert.True(loaded.Enabled);
+            Assert.True(loaded.Locked);
+            Assert.Equal(0.75, loaded.Opacity, 3);
+            Assert.Equal(1920, loaded.X);
+            Assert.Equal(1040, loaded.Y);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Settings_MissingOrBroken_FallsBackToDefaults()
+    {
+        var missing = FloatingOverlayStore.LoadFrom(Path.Combine(Path.GetTempPath(), "opencode-tests", "nope.json"));
+        Assert.Equal(OverlaySubscription.OpenCodeGo, missing.Subscription);
+        Assert.False(missing.Enabled);
+        Assert.Equal(0.92, missing.Opacity, 3);
+
+        var broken = FloatingOverlayStore.LoadFrom("Z:\\不存在的目录\\floating.json");
+        Assert.Equal(OverlaySubscription.OpenCodeGo, broken.Subscription);
+    }
+
+    [Theory]
+    [InlineData(0.3, 0.6)]
+    [InlineData(0.92, 0.92)]
+    [InlineData(1.5, 1.0)]
+    [InlineData(double.NaN, 0.92)]
+    public void ClampOpacity_ConvergesIntoRange(double input, double expected)
+        => Assert.Equal(expected, FloatingOverlaySettings.ClampOpacity(input), 3);
+}

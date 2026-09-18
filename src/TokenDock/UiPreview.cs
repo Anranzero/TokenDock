@@ -76,6 +76,25 @@ internal static class UiPreview
                 Shot(new SettingsForm(new UsageApiClient(), null), $"settings-{preset}-{tag}.png");
                 Shot(new GlmSettingsForm(new GlmUsageClient()), $"glm-settings-{preset}-{tag}.png");
 
+                // 悬浮窗：极简（前两行 + 倒计时）与悬停展开两态
+                var codexSample = CodexSampleReady();
+                var glmSample = GlmSampleReady();
+                var overlayMin = new FloatingOverlayForm(new FloatingOverlaySettings
+                {
+                    Subscription = OverlaySubscription.OpenCodeGo,
+                    Opacity = 1.0,
+                });
+                overlayMin.SetStates(fresh, codexSample, glmSample);
+                Shot(overlayMin, $"overlay-minimal-{preset}-{tag}.png");
+
+                var overlayGlm = new FloatingOverlayForm(new FloatingOverlaySettings
+                {
+                    Subscription = OverlaySubscription.Glm,
+                    Opacity = 1.0,
+                });
+                overlayGlm.SetStates(fresh, codexSample, glmSample);
+                Shot(overlayGlm, $"overlay-expanded-{preset}-{tag}.png", () => overlayGlm.PreviewSetExpanded(true));
+
                 var codexForm = new DetailForm(fresh, () => { }, () => { });
                 codexForm.ShowCodexPageForPreview(CodexSampleReady());
                 Shot(codexForm, $"codex-ok-{preset}-{tag}.png");

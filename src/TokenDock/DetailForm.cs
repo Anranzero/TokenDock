@@ -26,6 +26,7 @@ internal sealed class DetailForm : Form
     private readonly LocalTokensCard _local;
     private readonly CodexLevelsView _codexView;
     private readonly GlmLevelsView _glmView;
+    private readonly IconButton _btnOverlay;
     private readonly PillButton _btnRefresh;
     private readonly PillButton _btnKeys;
     private readonly PillButton _btnHide;
@@ -50,6 +51,9 @@ internal sealed class DetailForm : Form
     /// <summary>页面切换（0=OpenCode Go，1=Codex，2=GLM），由托盘上下文决定是否刷新。</summary>
     public event Action<int>? PageChanged;
 
+    /// <summary>悬浮余量开关（顶栏图钉按钮），由托盘上下文创建 / 隐藏悬浮窗。</summary>
+    public event Action? OverlayToggleRequested;
+
     public DetailForm(AppState state, Action refreshNow, Action openSettings)
     {
         _state = state;
@@ -64,13 +68,13 @@ internal sealed class DetailForm : Form
         MinimizeBox = true;
         ShowInTaskbar = true;
         StartPosition = FormStartPosition.Manual;
-        ClientSize = new Size(UiTheme.Px(440), UiTheme.Px(420));
+        ClientSize = new Size(UiTheme.Px(440), UiTheme.Px(436));
         Appearance.Attach(this); // 背景色随主题 + 毛玻璃/半透明窗口效果（即时切换）
 
-        // 顶部：分段切换 + 状态 + 设置入口
+        // 顶部：分段切换 + 状态 + 悬浮开关 + 设置入口
         _pages = new SegmentedControl("OpenCode Go", "Codex", "GLM")
         {
-            Size = new Size(UiTheme.Px(264), UiTheme.Px(28)),
+            Size = new Size(UiTheme.Px(248), UiTheme.Px(28)),
             Location = new Point(UiTheme.Px(24), UiTheme.Px(20)),
         };
         _pages.SelectionChanged += index => SetPage(index);
@@ -78,8 +82,16 @@ internal sealed class DetailForm : Form
         _spinner = new Spinner
         {
             Size = new Size(UiTheme.Px(16), UiTheme.Px(16)),
-            Location = new Point(UiTheme.Px(296), UiTheme.Px(26)),
+            Location = new Point(UiTheme.Px(280), UiTheme.Px(26)),
         };
+        var btnOverlay = new IconButton("\uE718")
+        {
+            Size = new Size(UiTheme.Px(32), UiTheme.Px(32)),
+            Location = new Point(ClientSize.Width - UiTheme.Px(24) - UiTheme.Px(32) - UiTheme.Px(36), UiTheme.Px(16)),
+        };
+        _btnOverlay = btnOverlay;
+        btnOverlay.Click += (_, _) => OverlayToggleRequested?.Invoke();
+        _tips.SetToolTip(btnOverlay, "悬浮余量");
         var btnGear = new IconButton("\uE713")
         {
             Size = new Size(UiTheme.Px(32), UiTheme.Px(32)),
@@ -131,7 +143,7 @@ internal sealed class DetailForm : Form
 
         Controls.AddRange(new Control[]
         {
-            _pages, _status, _spinner, btnGear,
+            _pages, _status, _spinner, btnOverlay, btnGear,
             _rolling, _weekly, _monthly, _local, _detailStatus, _codexView, _glmView,
             _btnRefresh, _btnKeys, _btnHide,
         });
@@ -233,25 +245,23 @@ internal sealed class DetailForm : Form
         if (_busy < 0) _busy = 0;
         _spinner.Visible = _busy > 0;
         _btnRefresh.Enabled = _busy == 0;
-        if (_busy > 0)
-        {
-            // 先让状态胶囊左移给转圈让位，再把转圈贴到胶囊右侧（与设置齿轮保持间距，避免重叠）
-            SetChip("刷新中…", UiTheme.Gray);
-            _spinner.Location = new Point(_status.Right + UiTheme.Px(8), _status.Location.Y + UiTheme.Px(4));
-        }
-        else
-        {
-            ApplyChip();
-        }
+        SetChip(_busy > 0 ? "刷新中…" : string.Empty, UiTheme.Gray);
+        if (_busy == 0) ApplyChip();
     }
 
+    /// <summary>状态胶囊固定在顶栏第二行左侧（全宽可用，不再与右侧图标抢空间）。</summary>
     private void SetChip(string text, Color dot)
     {
         _status.Set(text, dot);
-        var reserve = _spinner.Visible ? UiTheme.Px(24) : 0; // 刷新中为转圈预留空间
-        var left = ClientSize.Width - UiTheme.Px(64) - _status.Width - reserve;
-        var min = _pages.Right + UiTheme.Px(8);
-        _status.Location = new Point(Math.Max(min, left), UiTheme.Px(22));
+        _status.Location = new Point(UiTheme.Px(24), UiTheme.Px(52));
+    }
+
+    /// <summary>悬浮开关按钮状态（图钉图标：未开=描边灰，开启=绿色实心钉）。</summary>
+    public void SetOverlayActive(bool active)
+    {
+        _btnOverlay.Text = active ? "\uE719" : "\uE718";
+        _btnOverlay.ForeColor = active ? UiTheme.Green : UiTheme.TextSecondary;
+        _tips.SetToolTip(_btnOverlay, active ? "悬浮余量：已开启（点击关闭）" : "悬浮余量");
     }
 
     private void ApplyChip()
@@ -444,8 +454,9 @@ internal sealed class DetailForm : Form
         int contentBottom;
         if (_page == 0)
         {
+            // 状态胶囊占顶栏第二行（52..76），卡片从 80 开始
             var x = UiTheme.Px(24);
-            var y = UiTheme.Px(72);
+            var y = UiTheme.Px(80);
             foreach (var card in new Control[] { _rolling, _weekly, _monthly, _local })
             {
                 card.Width = UiTheme.Px(392);
@@ -466,7 +477,7 @@ internal sealed class DetailForm : Form
         else
         {
             // Codex / GLM 内容宿主按自身内容高度精确设界：永不与顶部状态行/底部按钮重叠
-            var top = UiTheme.Px(56);
+            var top = UiTheme.Px(80);
             var view = _page == 1 ? (Control)_codexView : _glmView;
             var height = _page == 1 ? _codexView.ContentHeight : _glmView.ContentHeight;
             view.Location = new Point(0, top);

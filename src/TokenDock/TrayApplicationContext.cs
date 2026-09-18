@@ -19,6 +19,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly GlmUsageClient _glmClient = new();
     private readonly GlmState _glmState = new();
     private GlmProvider _glmProvider = GlmSettingsStore.LoadProvider();
+    private readonly FloatingOverlaySettings _overlaySettings = FloatingOverlayStore.Load();
+    private FloatingOverlayForm? _overlay;
     private System.Windows.Forms.Timer _loginTimer;
     private TokenUsageReport _tokens = TokenUsageReport.Unavailable("尚未采集");
     private SynchronizationContext? _ui;
@@ -79,7 +81,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
             Appearance.RefreshSystemTheme(); // 跟随系统模式下感知系统主题切换
             RefreshNow();
             _ = RefreshTokensAsync();
-            if (_codexActivated) RefreshCodexNow();
+            if (_codexActivated
+                || _overlaySettings.Enabled && _overlay?.Subscription == OverlaySubscription.Codex)
+                RefreshCodexNow();
             RefreshGlmNow();
         };
         _timer.Start();
@@ -92,6 +96,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
         if (!SecureKeyStore.HasKey)
             OpenSettings();
         RefreshNow();
+        if (_overlaySettings.Enabled)
+            ShowOverlay();
     }
 
     private void ShowDetails()
@@ -102,6 +108,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _detail.CodexLoginRequested += OnCodexLoginRequested;
             _detail.CodexRefreshRequested += RefreshCodexNow;
             _detail.GlmRefreshRequested += RefreshGlmNow;
+            _detail.OverlayToggleRequested += ToggleOverlay;
             _detail.GlmSettingsRequested += OpenGlmSettings;
             _detail.PageChanged += page =>
             {
@@ -135,6 +142,85 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         _detail.UpdateState(_state);
         RefreshNow();
+    }
+
+    // ---- 悬浮余量 ----
+
+    private void ToggleOverlay()
+    {
+        if (_overlay is { Visible: true })
+            HideOverlay();
+        else
+            ShowOverlay();
+    }
+
+    private FloatingOverlayForm CreateOverlay()
+    {
+        var overlay = new FloatingOverlayForm(_overlaySettings);
+        overlay.RefreshRequested += () =>
+        {
+            switch (overlay.Subscription)
+            {
+                case OverlaySubscription.Codex: RefreshCodexNow(); break;
+                case OverlaySubscription.Glm: RefreshGlmNow(); break;
+                default: RefreshNow(); break;
+            }
+        };
+        overlay.OpenMainRequested += ShowDetails;
+        overlay.HideRequested += HideOverlay;
+        overlay.ExitRequested += HideOverlay;
+        overlay.SubscriptionChanged += sub =>
+        {
+            _overlaySettings.Subscription = sub;
+            FloatingOverlayStore.Save(_overlaySettings);
+            if (sub == OverlaySubscription.Codex) RefreshCodexNow();
+            if (sub == OverlaySubscription.Glm) RefreshGlmNow();
+        };
+        overlay.OpacityChanged += _ => CommitOverlayState();
+        overlay.LockChanged += _ => CommitOverlayState();
+        overlay.MoveCommitted += CommitOverlayState;
+        return overlay;
+    }
+
+    private void ShowOverlay()
+    {
+        _overlay ??= CreateOverlay();
+        _overlay.ShowAt(_overlaySettings);
+        _overlay.SetStates(_state, _codexState, _glmState);
+        _overlaySettings.Enabled = true;
+        FloatingOverlayStore.Save(_overlaySettings);
+        _detail?.SetOverlayActive(true);
+        // 立即补一次当前订阅刷新，避免悬浮窗停留在旧数据
+        if (_overlay.Subscription == OverlaySubscription.Codex) RefreshCodexNow();
+        if (_overlay.Subscription == OverlaySubscription.Glm) RefreshGlmNow();
+    }
+
+    private void HideOverlay()
+    {
+        _overlay?.Hide();
+        _overlaySettings.Enabled = false;
+        FloatingOverlayStore.Save(_overlaySettings);
+        _detail?.SetOverlayActive(false);
+    }
+
+    /// <summary>悬浮窗位置 / 订阅 / 透明度 / 锁定任一变化后整体落盘。</summary>
+    private void CommitOverlayState()
+    {
+        if (_overlay is { } overlay)
+        {
+            _overlaySettings.X = overlay.Location.X;
+            _overlaySettings.Y = overlay.Location.Y;
+            _overlaySettings.Subscription = overlay.Subscription;
+            _overlaySettings.Locked = overlay.Locked;
+            _overlaySettings.Opacity = overlay.Opacity;
+        }
+
+        FloatingOverlayStore.Save(_overlaySettings);
+    }
+
+    private void PushOverlay()
+    {
+        _overlay?.SetStates(_state, _codexState, _glmState);
     }
 
     private void OpenSettings()
@@ -186,6 +272,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             if (result.Success && result.Data is not null)
                 CheckLowRemaining(result.Data);
             ApplyToUi();
+            PushOverlay();
         }
         catch (OperationCanceledException)
         {
@@ -237,6 +324,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _glmRefreshing = false;
             _detail?.SetRefreshing(false);
             _detail?.UpdateGlmState(_glmState);
+            PushOverlay();
         }
     }
 
@@ -290,6 +378,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _codexRefreshing = false;
             _detail?.SetRefreshing(false);
             _detail?.UpdateCodexState(_codexState);
+            PushOverlay();
         }
     }
 
@@ -406,6 +495,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _detail?.UpdateCodexState(_codexState);
         _detail?.UpdateGlmState(_glmState);
         _detail?.UpdateLocalTokens(_tokens);
+        PushOverlay();
     }
 
     private void ApplyToUi()
@@ -448,6 +538,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     {
         _exiting = true;
         _timer.Stop();
+        _overlay?.Hide();
         _tray.Visible = false;
         _detail?.ForceClose();
         ExitThread();
