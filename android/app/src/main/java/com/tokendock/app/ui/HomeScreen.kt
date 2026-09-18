@@ -1,6 +1,10 @@
 package com.tokendock.app.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,7 +34,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.Indicator
@@ -53,16 +56,16 @@ import com.tokendock.app.data.QuotaState
 import com.tokendock.app.data.UsageWindow
 import com.tokendock.app.ui.ios.IosBar
 import com.tokendock.app.ui.ios.IosCard
+import com.tokendock.app.ui.ios.IosCircleIconButton
 import com.tokendock.app.ui.ios.IosColors
 import com.tokendock.app.ui.ios.IosSeparator
 import com.tokendock.app.ui.ios.IosStatusPill
 import com.tokendock.app.ui.ios.iosColors
 
 /**
- * 首页（方案 A · 极简卡片版）：
- * 两层顶部（标题 + 状态行 / 右上角统一大小的刷新与设置）→ 轻量内联警告卡 →
- * 订阅摘要卡 → 三张余量卡（名称 / 大数字 / 6dp 条形进度 / 倒计时，点卡展开详情）→
- * 本机 Token 统计卡（功能卡 + 优雅空状态）。下拉刷新，无底部按钮。
+ * 首页（HyperOS 3 风格）：标题 + 紧凑状态 + 两个圆形图标按钮 → 轻量警告卡 →
+ * 订阅摘要 → 三张余量卡（超大数字 + 胶囊进度 + 倒计时，点卡展开详情）→ 空状态。
+ * 下拉刷新；无底部按钮。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -74,7 +77,6 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
 ) {
     val colors = iosColors()
-
     val pullState = rememberPullToRefreshState()
 
     PullToRefreshBox(
@@ -83,9 +85,8 @@ fun HomeScreen(
         state = pullState,
         modifier = modifier
             .fillMaxSize()
-            .background(if (glassEnabled) colors.background.copy(alpha = 0.94f) else colors.background),
+            .background(if (glassEnabled) colors.background.copy(alpha = 0.96f) else colors.background),
         indicator = {
-            // 轻量刷新指示：小尺寸 + 蓝青弧线，不遮挡页面
             Indicator(
                 state = pullState,
                 isRefreshing = state.refreshing,
@@ -107,7 +108,7 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Spacer(Modifier.height(4.dp))
-            TopBar(state, colors, onRefresh, onOpenSettings)
+            Header(state, colors, onRefresh, onOpenSettings)
 
             val data = state.lastGood
             WarningCard(state, colors)
@@ -115,24 +116,24 @@ fun HomeScreen(
             if (data == null) {
                 EmptyStateCard(colors, onOpenSettings)
             } else {
-                SummaryCard(state, colors)
+                SubscriptionCard(state, colors)
                 QuotaCard("5 小时用量", "rolling", data.rolling, state, colors)
                 QuotaCard("本周用量", "weekly", data.weekly, state, colors)
                 QuotaCard("本月用量", "monthly", data.monthly, state, colors)
             }
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(16.dp))
         }
     }
 }
 
-// ---------- 顶部：两层结构 + 统一 40dp 图标点击区 ----------
+// ---------- Header：标题 + 紧凑状态 + 圆形图标按钮 ----------
 
 @Composable
-private fun TopBar(state: QuotaState, colors: IosColors, onRefresh: () -> Unit, onOpenSettings: () -> Unit) {
+private fun Header(state: QuotaState, colors: IosColors, onRefresh: () -> Unit, onOpenSettings: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text("TokenDock", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = colors.label)
+            Text("TokenDock", fontSize = 26.sp, fontWeight = FontWeight.SemiBold, color = colors.label)
             Spacer(Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(8.dp).background(stateTint(state, colors), CircleShape))
@@ -140,21 +141,22 @@ private fun TopBar(state: QuotaState, colors: IosColors, onRefresh: () -> Unit, 
                 Text(statusLine(state), fontSize = 13.sp, color = colors.secondaryLabel)
             }
         }
-        IconButton(onClick = onRefresh, modifier = Modifier.size(40.dp)) {
-            Icon(Icons.Outlined.Refresh, contentDescription = "立即刷新", tint = colors.accent, modifier = Modifier.size(20.dp))
-        }
-        Spacer(Modifier.width(4.dp))
-        IconButton(onClick = onOpenSettings, modifier = Modifier.size(40.dp)) {
-            Icon(Icons.Outlined.Settings, contentDescription = "设置", tint = colors.accent, modifier = Modifier.size(20.dp))
-        }
+        IosCircleIconButton(Icons.Outlined.Refresh, "立即刷新", onRefresh)
+        Spacer(Modifier.width(8.dp))
+        IosCircleIconButton(Icons.Outlined.Settings, "设置", onOpenSettings)
     }
 }
 
-// ---------- 轻量内联警告卡（失败 / 过期时） ----------
+// ---------- 轻量警告卡（失败 / 过期） ----------
 
 @Composable
 private fun WarningCard(state: QuotaState, colors: IosColors) {
-    if (!state.isStale && state.failure == FetchFailureKind.None) return
+    // 未配置密钥由空状态卡引导；这里只提示「真异常」与「已过期」
+    if (!state.isStale &&
+        (state.failure == FetchFailureKind.None || state.failure == FetchFailureKind.NotConfigured)
+    ) {
+        return
+    }
     val tint = if (state.isStale) colors.amber else colors.red
     val title = if (state.isStale) "数据已过期" else "获取失败"
     val reason = state.statusText
@@ -183,10 +185,10 @@ private fun WarningCard(state: QuotaState, colors: IosColors) {
     }
 }
 
-// ---------- 订阅摘要卡 ----------
+// ---------- 订阅摘要（紧凑一行） ----------
 
 @Composable
-private fun SummaryCard(state: QuotaState, colors: IosColors) {
+private fun SubscriptionCard(state: QuotaState, colors: IosColors) {
     val data = state.lastGood ?: return
     val (pillText, pillTint) = when {
         state.isStale -> "已过期" to colors.amber
@@ -197,22 +199,20 @@ private fun SummaryCard(state: QuotaState, colors: IosColors) {
     IosCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("OpenCode Go", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = colors.label)
+                Text("OpenCode Go", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = colors.label)
                 Spacer(Modifier.height(2.dp))
-                Text("官方接口 · 账号级数据", fontSize = 13.sp, color = colors.secondaryLabel)
+                Text(
+                    "官方接口 · 更新于 ${DisplayFormat.formatClock(data.fetchedAtMillis)}",
+                    fontSize = 13.sp,
+                    color = colors.secondaryLabel,
+                )
             }
             IosStatusPill(pillText, pillTint)
         }
-        Spacer(Modifier.height(10.dp))
-        Text(
-            "最近刷新 ${DisplayFormat.formatClock(data.fetchedAtMillis)} · 每 60 秒自动刷新",
-            fontSize = 13.sp,
-            color = colors.tertiaryLabel,
-        )
     }
 }
 
-// ---------- 余量卡：大数字 + 条形进度 + 倒计时，点卡展开详情 ----------
+// ---------- 余量卡：超大数字 + 胶囊进度 + 倒计时 ----------
 
 @Composable
 private fun QuotaCard(
@@ -226,37 +226,41 @@ private fun QuotaCard(
     val remaining = window?.remainingPercent
     val color = valueColor(remaining, state, colors)
 
-    IosCard(onClick = { expanded = !expanded }) {
+    IosCard(
+        modifier = Modifier.animateContentSize(animationSpec = spring()),
+        onClick = { expanded = !expanded },
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = colors.label)
             Spacer(Modifier.weight(1f))
             Text(statusWord(window), fontSize = 13.sp, color = colors.secondaryLabel)
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
 
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
                 text = remaining?.let { DisplayFormat.formatRemainingPercent(it).removeSuffix("%") } ?: "—",
-                fontSize = 34.sp,
+                fontSize = 40.sp,
                 fontWeight = FontWeight.Bold,
                 color = color,
             )
             if (remaining != null) {
                 Text(
                     "%",
-                    fontSize = 15.sp,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
                     color = color,
-                    modifier = Modifier.padding(start = 2.dp, bottom = 4.dp),
+                    modifier = Modifier.padding(start = 3.dp, bottom = 6.dp),
                 )
             }
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(12.dp))
 
         IosBar(progress = remaining?.let { (it / 100.0).toFloat() }, color = color)
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(12.dp))
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -273,7 +277,11 @@ private fun QuotaCard(
             )
         }
 
-        AnimatedVisibility(visible = expanded) {
+        AnimatedVisibility(
+            visible = expanded,
+            enter = fadeIn() + androidx.compose.animation.expandVertically(),
+            exit = fadeOut() + androidx.compose.animation.shrinkVertically(),
+        ) {
             Column {
                 Spacer(Modifier.height(12.dp))
                 IosSeparator(startInset = 0.dp)
@@ -291,12 +299,12 @@ private fun QuotaCard(
 @Composable
 private fun DetailLine(label: String, value: String, colors: IosColors) {
     Row(Modifier.padding(vertical = 3.dp)) {
-        Text(label, fontSize = 13.sp, color = colors.tertiaryLabel, modifier = Modifier.width(84.dp))
+        Text(label, fontSize = 13.sp, color = colors.tertiaryLabel, modifier = Modifier.width(88.dp))
         Text(value, fontSize = 13.sp, color = colors.secondaryLabel)
     }
 }
 
-// ---------- 空状态（尚未配置密钥） ----------
+// ---------- 空状态 ----------
 
 @Composable
 private fun EmptyStateCard(colors: IosColors, onOpenSettings: () -> Unit) {
@@ -307,13 +315,13 @@ private fun EmptyStateCard(colors: IosColors, onOpenSettings: () -> Unit) {
         ) {
             Box(
                 modifier = Modifier
-                    .size(56.dp)
+                    .size(60.dp)
                     .background(colors.accent.copy(alpha = 0.12f), CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Outlined.Key, contentDescription = null, tint = colors.accent, modifier = Modifier.size(26.dp))
+                Icon(Icons.Outlined.Key, contentDescription = null, tint = colors.accent, modifier = Modifier.size(28.dp))
             }
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(16.dp))
             Text("尚未设置 API Key", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = colors.label)
             Spacer(Modifier.height(6.dp))
             Text(
@@ -322,16 +330,16 @@ private fun EmptyStateCard(colors: IosColors, onOpenSettings: () -> Unit) {
                 color = colors.secondaryLabel,
                 textAlign = TextAlign.Center,
             )
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(18.dp))
             Button(
                 onClick = onOpenSettings,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(46.dp),
-                shape = RoundedCornerShape(14.dp),
+                    .height(48.dp),
+                shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = Color.White),
             ) {
-                Text("去设置密钥", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text("去设置密钥", fontSize = 16.sp, fontWeight = FontWeight.Medium)
             }
         }
     }
@@ -359,7 +367,7 @@ private fun stateTint(state: QuotaState, colors: IosColors): Color {
     }
 }
 
-/** 数字配色：正常=蓝青主色，≤20%=警告琥珀，过期=次要灰，未知=三级灰。 */
+/** 数字配色：正常=系统蓝青，≤20%=橙色预警，过期=次要灰，未知=三级灰。 */
 private fun valueColor(remaining: Double?, state: QuotaState, colors: IosColors): Color = when {
     state.isStale -> colors.secondaryLabel
     remaining == null -> colors.tertiaryLabel
@@ -367,7 +375,7 @@ private fun valueColor(remaining: Double?, state: QuotaState, colors: IosColors)
     else -> colors.accent
 }
 
-/** 卡片右侧状态文字：显示该窗口自身的接口状态（全局过期由警告卡统一提示，避免三处重复）。 */
+/** 卡片右侧状态文字：窗口自身的接口状态（全局过期由警告卡统一提示）。 */
 private fun statusWord(window: UsageWindow?): String = when {
     window == null -> "接口未返回"
     window.remainingPercent == null -> "数值未知"

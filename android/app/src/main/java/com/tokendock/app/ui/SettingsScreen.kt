@@ -14,11 +14,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Refresh
@@ -51,6 +53,7 @@ import com.tokendock.app.data.SecureKeyStore
 import com.tokendock.app.data.SettingsStore
 import com.tokendock.app.data.ThemeMode
 import com.tokendock.app.data.UsageApiClient
+import com.tokendock.app.ui.ios.IosCircleIconButton
 import com.tokendock.app.ui.ios.IosColors
 import com.tokendock.app.ui.ios.IosFooter
 import com.tokendock.app.ui.ios.IosRow
@@ -102,24 +105,15 @@ fun SettingsScreen(
             .statusBarsPadding()
             .navigationBarsPadding(),
     ) {
-        // iOS 返回：左上角文字按钮
-        Text(
-            text = "‹ 返回",
-            fontSize = 17.sp,
-            color = colors.accent,
-            modifier = Modifier
-                .padding(start = 16.dp, top = 12.dp)
-                .clickable { onBack() }
-                .padding(4.dp),
-        )
-
-        Text(
-            "设置",
-            fontSize = 34.sp,
-            fontWeight = FontWeight.Bold,
-            color = colors.label,
-            modifier = Modifier.padding(start = 20.dp, top = 8.dp, bottom = 4.dp),
-        )
+        // HyperOS 风格：圆形返回按钮 + 标题
+        Row(
+            modifier = Modifier.padding(start = 20.dp, top = 8.dp, end = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IosCircleIconButton(Icons.Outlined.ArrowBack, "返回", onBack)
+            Spacer(Modifier.width(12.dp))
+            Text("设置", fontSize = 26.sp, fontWeight = FontWeight.SemiBold, color = colors.label)
+        }
 
         // ---- 账户 ----
         IosSectionHeader("账户")

@@ -20,10 +20,16 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 裁剪：material-icons-extended 等大依赖在 release 中只保留用到的部分
+            isMinifyEnabled = true
+            isShrinkResources = true
             // 未配置签名时 assembleRelease 产出未签名 APK；配置 keystore 后自动签名。
             // 详见 android/README.md「Release 构建」。
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+        debug {
+            // 本地调试包不裁剪，体积偏大属正常；交付以 release 为准
+            isMinifyEnabled = false
         }
     }
 

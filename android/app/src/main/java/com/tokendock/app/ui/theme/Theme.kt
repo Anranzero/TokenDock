@@ -43,32 +43,32 @@ fun TokenDockTheme(
     }
 }
 
-// iOS 语义色 + TokenDock 蓝青主色
+// HyperOS 语义色 + TokenDock 蓝青主色
 private val AccentLight = Color(0xFF0E7490)
 private val AccentDark = Color(0xFF22D3EE)
 
 private val LightScheme = lightColorScheme(
     primary = AccentLight,
     onPrimary = Color.White,
-    background = Color(0xFFF2F2F7),
-    onBackground = Color(0xFF000000),
+    background = Color(0xFFF3F5F8),
+    onBackground = Color(0xFF14171C),
     surface = Color.White,
-    onSurface = Color(0xFF000000),
-    surfaceVariant = Color(0xFFF2F2F7),
-    onSurfaceVariant = Color(0x993C3C43),
-    outline = Color(0x293C3C43),
-    error = Color(0xFFFF3B30),
+    onSurface = Color(0xFF14171C),
+    surfaceVariant = Color(0xFFF3F5F8),
+    onSurfaceVariant = Color(0x99272D38),
+    outline = Color(0x1F0F172A),
+    error = Color(0xFFDC2626),
 )
 
 private val DarkScheme = darkColorScheme(
     primary = AccentDark,
     onPrimary = Color(0xFF06222B),
-    background = Color(0xFF000000),
-    onBackground = Color.White,
-    surface = Color(0xFF1C1C1E),
-    onSurface = Color.White,
-    surfaceVariant = Color(0xFF2C2C2E),
-    onSurfaceVariant = Color(0x99EBEBF5),
-    outline = Color(0x5454565A),
-    error = Color(0xFFFF453A),
+    background = Color(0xFF17181B),
+    onBackground = Color(0xFFECEEF2),
+    surface = Color(0xFF212327),
+    onSurface = Color(0xFFECEEF2),
+    surfaceVariant = Color(0xFF2A2D32),
+    onSurfaceVariant = Color(0x99A8B0BC),
+    outline = Color(0x1AFFFFFF),
+    error = Color(0xFFF87171),
 )
