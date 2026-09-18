@@ -181,4 +181,77 @@ public class FloatingOverlayTests
     [InlineData(double.NaN, 0.92)]
     public void ClampOpacity_ConvergesIntoRange(double input, double expected)
         => Assert.Equal(expected, FloatingOverlaySettings.ClampOpacity(input), 3);
+
+    // ---- 窗体级回归：切换订阅必须换数据（用户实测反馈"不管选什么都是 OpenCode Go"） ----
+
+    private static (AppState Op, CodexState Codex, GlmState Glm) SampleStates()
+    {
+        var op = new AppState();
+        op.Apply(UsageApiClient.ParseSuccessBody(OpenCodeJson));
+
+        var codex = new CodexState();
+        CodexStatePolicy.ApplySnapshot(codex, new CodexAccountInfo { LoggedIn = true },
+            new CodexRateLimitsSnapshot
+            {
+                Groups = new[]
+                {
+                    new CodexRateGroup
+                    {
+                        LimitId = "codex",
+                        Primary = new CodexRateWindow { UsedPercent = 30, WindowDurationMins = 300, ResetsAtUnixSeconds = 1789658904 },
+                    },
+                },
+            });
+
+        return (op, codex, GlmStateWithData());
+    }
+
+    [Fact]
+    public void Form_SwitchingSubscription_ChangesModel()
+    {
+        UiTheme.Init(1f);
+        var (op, codex, glm) = SampleStates();
+        using var form = new FloatingOverlayForm(new FloatingOverlaySettings { Subscription = OverlaySubscription.OpenCodeGo, Opacity = 1.0 });
+        form.SetStates(op, codex, glm);
+
+        Assert.Equal("OpenCode Go", form.CurrentModel.Title);
+        Assert.Equal("5小时剩余", form.CurrentModel.Rows[0].Label);
+
+        form.Subscription = OverlaySubscription.Glm;
+        Assert.Equal("GLM", form.CurrentModel.Title);
+        Assert.Equal(59.25, form.CurrentModel.Rows[0].Percent!.Value, 1);
+
+        form.Subscription = OverlaySubscription.Codex;
+        Assert.Equal("Codex", form.CurrentModel.Title);
+        Assert.Contains("5小时", form.CurrentModel.Rows[0].Label);
+    }
+
+    [Fact]
+    public void Form_MenuClick_SwitchesSubscription()
+    {
+        UiTheme.Init(1f);
+        var (op, codex, glm) = SampleStates();
+        using var form = new FloatingOverlayForm(new FloatingOverlaySettings { Opacity = 1.0 });
+        form.SetStates(op, codex, glm);
+
+        // 模拟真实右键菜单点击（下标 2 = GLM）
+        form.SubscriptionMenuItemForTest(2).PerformClick();
+        Assert.Equal("GLM", form.CurrentModel.Title);
+
+        form.SubscriptionMenuItemForTest(1).PerformClick();
+        Assert.Equal("Codex", form.CurrentModel.Title);
+
+        form.SubscriptionMenuItemForTest(0).PerformClick();
+        Assert.Equal("OpenCode Go", form.CurrentModel.Title);
+    }
+
+    [Fact]
+    public void Form_CtorRestoresSavedSubscription()
+    {
+        UiTheme.Init(1f);
+        var (op, codex, glm) = SampleStates();
+        using var form = new FloatingOverlayForm(new FloatingOverlaySettings { Subscription = OverlaySubscription.Glm, Opacity = 1.0 });
+        form.SetStates(op, codex, glm);
+        Assert.Equal("GLM", form.CurrentModel.Title);
+    }
 }

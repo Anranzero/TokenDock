@@ -33,6 +33,8 @@ internal sealed class DetailForm : Form
     private readonly ToolTip _tips = new();
     private CodexState _codexState = new();
     private GlmState _glmState = new();
+    private bool _overlayActive;
+    private OverlaySubscription _overlaySubscription = OverlaySubscription.OpenCodeGo;
     private int _page;
     private int _busy;
     private bool _hideOnClose = true;
@@ -51,8 +53,11 @@ internal sealed class DetailForm : Form
     /// <summary>页面切换（0=OpenCode Go，1=Codex，2=GLM），由托盘上下文决定是否刷新。</summary>
     public event Action<int>? PageChanged;
 
-    /// <summary>悬浮余量开关（顶栏图钉按钮），由托盘上下文创建 / 隐藏悬浮窗。</summary>
-    public event Action? OverlayToggleRequested;
+    /// <summary>悬浮余量：选择要悬浮的订阅（顶栏图钉菜单）。</summary>
+    public event Action<OverlaySubscription>? OverlaySubscriptionRequested;
+
+    /// <summary>关闭悬浮窗（图钉菜单「关闭悬浮」）。</summary>
+    public event Action? OverlayHideRequested;
 
     public DetailForm(AppState state, Action refreshNow, Action openSettings)
     {
@@ -90,8 +95,8 @@ internal sealed class DetailForm : Form
             Location = new Point(ClientSize.Width - UiTheme.Px(24) - UiTheme.Px(32) - UiTheme.Px(36), UiTheme.Px(16)),
         };
         _btnOverlay = btnOverlay;
-        btnOverlay.Click += (_, _) => OverlayToggleRequested?.Invoke();
-        _tips.SetToolTip(btnOverlay, "悬浮余量");
+        btnOverlay.Click += (_, _) => ShowOverlayMenu();
+        _tips.SetToolTip(btnOverlay, "悬浮余量：选择订阅");
         var btnGear = new IconButton("\uE713")
         {
             Size = new Size(UiTheme.Px(32), UiTheme.Px(32)),
@@ -257,12 +262,56 @@ internal sealed class DetailForm : Form
     }
 
     /// <summary>悬浮开关按钮状态（图钉图标：未开=描边灰，开启=绿色实心钉）。</summary>
-    public void SetOverlayActive(bool active)
+    public void SetOverlayState(bool active, OverlaySubscription subscription)
     {
+        _overlayActive = active;
+        _overlaySubscription = subscription;
         _btnOverlay.Text = active ? "\uE719" : "\uE718";
         _btnOverlay.ForeColor = active ? UiTheme.Green : UiTheme.TextSecondary;
-        _tips.SetToolTip(_btnOverlay, active ? "悬浮余量：已开启（点击关闭）" : "悬浮余量");
+        _tips.SetToolTip(_btnOverlay, active
+            ? $"悬浮余量：{OverlayName(subscription)}（点击可切换订阅 / 关闭）"
+            : "悬浮余量：选择订阅");
     }
+
+    /// <summary>图钉菜单：选择悬浮的订阅（当前项打勾），已开启时可关闭。</summary>
+    private void ShowOverlayMenu()
+    {
+        var menu = new ContextMenuStrip();
+        menu.Items.Add(new ToolStripMenuItem("悬浮显示") { Enabled = false });
+        var names = new[] { "OpenCode Go", "Codex", "GLM" };
+        for (var i = 0; i < names.Length; i++)
+        {
+            var index = i;
+            var item = new ToolStripMenuItem(names[i])
+            {
+                Checked = _overlayActive && (int)_overlaySubscription == index,
+            };
+            item.Click += (_, _) => OverlaySubscriptionRequested?.Invoke((OverlaySubscription)index);
+            menu.Items.Add(item);
+        }
+
+        if (_overlayActive)
+        {
+            menu.Items.Add(new ToolStripSeparator());
+            var hide = new ToolStripMenuItem("关闭悬浮");
+            hide.Click += (_, _) => OverlayHideRequested?.Invoke();
+            menu.Items.Add(hide);
+        }
+
+        TrayMenuTheme.Apply(menu);
+        menu.Closed += (_, _) => menu.Dispose();
+        menu.Show(_btnOverlay, new Point(-UiTheme.Px(48), _btnOverlay.Height + UiTheme.Px(4)));
+    }
+
+    private static string OverlayName(OverlaySubscription subscription) => subscription switch
+    {
+        OverlaySubscription.Codex => "Codex",
+        OverlaySubscription.Glm => "GLM",
+        _ => "OpenCode Go",
+    };
+
+    /// <summary>当前页签（0=OpenCode Go，1=Codex，2=GLM）——托盘上下文据此决定首次开启的默认订阅。</summary>
+    public int CurrentPage => _page;
 
     private void ApplyChip()
     {

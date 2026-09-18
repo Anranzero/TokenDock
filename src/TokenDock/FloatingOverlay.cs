@@ -261,7 +261,6 @@ internal sealed class FloatingOverlayForm : Form
         TopMost = true;
 
         BuildMenu();
-        ContextMenuStrip = _menu;
         Appearance.Attach(this);
         UiTheme.Changed += OnThemeChanged;
         Disposed += (_, _) => UiTheme.Changed -= OnThemeChanged;
@@ -290,6 +289,12 @@ internal sealed class FloatingOverlayForm : Form
         _glm = glm;
         RefreshModel();
     }
+
+    /// <summary>测试探针：当前展示模型（订阅切换后应随之变化）。</summary>
+    internal OverlayModel CurrentModel => _model;
+
+    /// <summary>测试探针：订阅菜单项（模拟真实右键点击路径）。</summary>
+    internal ToolStripMenuItem SubscriptionMenuItemForTest(int index) => _subscriptionChoices[index];
 
     /// <summary>按保存的位置显示（默认右下角，避开任务栏）；并应用主题窗口效果。</summary>
     public void ShowAt(FloatingOverlaySettings settings)
@@ -446,6 +451,14 @@ internal sealed class FloatingOverlayForm : Form
     protected override void OnMouseUp(MouseEventArgs e)
     {
         base.OnMouseUp(e);
+        if (e.Button == MouseButtons.Right)
+        {
+            // 显式弹出菜单：无焦点窗口（WS_EX_NOACTIVATE）用 ContextMenuStrip 属性挂载时
+            // 菜单有时收不到点击，手动 Show 更可靠
+            _menu.Show(Cursor.Position);
+            return;
+        }
+
         if (_dragging) MoveCommitted?.Invoke();
         _dragging = false;
     }

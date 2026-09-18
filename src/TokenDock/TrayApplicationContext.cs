@@ -108,7 +108,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
             _detail.CodexLoginRequested += OnCodexLoginRequested;
             _detail.CodexRefreshRequested += RefreshCodexNow;
             _detail.GlmRefreshRequested += RefreshGlmNow;
-            _detail.OverlayToggleRequested += ToggleOverlay;
+            _detail.OverlaySubscriptionRequested += sub => ShowOverlay(sub);
+            _detail.OverlayHideRequested += HideOverlay;
             _detail.GlmSettingsRequested += OpenGlmSettings;
             _detail.PageChanged += page =>
             {
@@ -146,14 +147,6 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     // ---- 悬浮余量 ----
 
-    private void ToggleOverlay()
-    {
-        if (_overlay is { Visible: true })
-            HideOverlay();
-        else
-            ShowOverlay();
-    }
-
     private FloatingOverlayForm CreateOverlay()
     {
         var overlay = new FloatingOverlayForm(_overlaySettings);
@@ -173,6 +166,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         {
             _overlaySettings.Subscription = sub;
             FloatingOverlayStore.Save(_overlaySettings);
+            _detail?.SetOverlayState(_overlay?.Visible == true, sub);
             if (sub == OverlaySubscription.Codex) RefreshCodexNow();
             if (sub == OverlaySubscription.Glm) RefreshGlmNow();
         };
@@ -182,17 +176,27 @@ internal sealed class TrayApplicationContext : ApplicationContext
         return overlay;
     }
 
-    private void ShowOverlay()
+    /// <summary>显示 / 切换悬浮窗订阅；不传订阅时沿用已保存的选择。</summary>
+    private void ShowOverlay(OverlaySubscription? subscription = null)
     {
         _overlay ??= CreateOverlay();
+        if (subscription is { } sub)
+            _overlay.Subscription = sub; // 变更时经 SubscriptionChanged 落盘并触发刷新
+
         _overlay.ShowAt(_overlaySettings);
         _overlay.SetStates(_state, _codexState, _glmState);
         _overlaySettings.Enabled = true;
+        _overlaySettings.Subscription = _overlay.Subscription;
         FloatingOverlayStore.Save(_overlaySettings);
-        _detail?.SetOverlayActive(true);
+        _detail?.SetOverlayState(true, _overlay.Subscription);
+
         // 立即补一次当前订阅刷新，避免悬浮窗停留在旧数据
-        if (_overlay.Subscription == OverlaySubscription.Codex) RefreshCodexNow();
-        if (_overlay.Subscription == OverlaySubscription.Glm) RefreshGlmNow();
+        switch (_overlay.Subscription)
+        {
+            case OverlaySubscription.Codex: RefreshCodexNow(); break;
+            case OverlaySubscription.Glm: RefreshGlmNow(); break;
+            default: RefreshNow(); break;
+        }
     }
 
     private void HideOverlay()
@@ -200,7 +204,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _overlay?.Hide();
         _overlaySettings.Enabled = false;
         FloatingOverlayStore.Save(_overlaySettings);
-        _detail?.SetOverlayActive(false);
+        _detail?.SetOverlayState(false, _overlay?.Subscription ?? _overlaySettings.Subscription);
     }
 
     /// <summary>悬浮窗位置 / 订阅 / 透明度 / 锁定任一变化后整体落盘。</summary>
