@@ -57,6 +57,9 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
 
+    // outline 风格图标集（Icons.Outlined.*）
+    implementation("androidx.compose.material:material-icons-extended")
+
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     // 纯 JVM 单测：org.json 在 Android 上是系统实现，单测里用官方 JVM 版替代

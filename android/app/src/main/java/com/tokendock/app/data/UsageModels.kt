@@ -87,5 +87,11 @@ object DisplayFormat {
         return text.format(java.util.Date(millis))
     }
 
+    /** 绝对时间（用于详情行，如 09-18 12:44）。 */
+    fun formatDateTime(millis: Long): String {
+        val text = java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault())
+        return text.format(java.util.Date(millis))
+    }
+
     private fun Double.roundToInt(): Long = kotlin.math.round(this).toLong()
 }

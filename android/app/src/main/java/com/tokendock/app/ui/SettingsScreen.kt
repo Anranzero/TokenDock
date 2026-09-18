@@ -19,9 +19,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -127,7 +127,7 @@ fun SettingsScreen(
             IosRow(
                 title = "API Key",
                 subtitle = if (hasKey) "已保存 · 点击更换" else "尚未设置",
-                icon = Icons.Filled.Lock,
+                icon = Icons.Outlined.Lock,
                 iconTint = colors.accent,
                 showChevron = true,
                 onClick = { showKeyDialog = true },
@@ -150,7 +150,7 @@ fun SettingsScreen(
                 IosRow(
                     title = "前台刷新间隔",
                     subtitle = "界面打开时自动刷新",
-                    icon = Icons.Filled.Refresh,
+                    icon = Icons.Outlined.Refresh,
                     iconTint = colors.accent,
                     trailingText = "$refreshSeconds 秒",
                     showChevron = true,
@@ -191,7 +191,7 @@ fun SettingsScreen(
             IosSeparator()
             IosRow(
                 title = "通知",
-                icon = Icons.Filled.Notifications,
+                icon = Icons.Outlined.Notifications,
                 iconTint = colors.accent,
                 trailing = {
                     IosSwitch(

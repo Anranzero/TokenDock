@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -69,31 +70,32 @@ data class IosColors(
 )
 
 private val IosLight = IosColors(
-    background = Color(0xFFF2F2F7),
+    background = Color(0xFFF5F7F9),
     card = Color(0xFFFFFFFF),
-    separator = Color(0x293C3C43),
-    label = Color(0xFF000000),
+    separator = Color(0x1F111827),
+    label = Color(0xFF111827),
     secondaryLabel = Color(0x993C3C43),
     tertiaryLabel = Color(0x4D3C3C43),
-    fill = Color(0x1F767680),
+    fill = Color(0x14111827),
     accent = Color(0xFF0E7490),
-    green = Color(0xFF34C759),
-    amber = Color(0xFFFF9500),
-    red = Color(0xFFFF3B30),
+    green = Color(0xFF16A34A),
+    amber = Color(0xFFD97706),
+    red = Color(0xFFDC2626),
 )
 
 private val IosDark = IosColors(
-    background = Color(0xFF000000),
-    card = Color(0xFF1C1C1E),
-    separator = Color(0x5454565A),
-    label = Color(0xFFFFFFFF),
-    secondaryLabel = Color(0x99EBEBF5),
-    tertiaryLabel = Color(0x4DEBEBF5),
-    fill = Color(0x24767680),
+    // 暗色用深灰层次（不死黑）：底 121417 / 卡 1C1F24 / 线 2A2F36
+    background = Color(0xFF121417),
+    card = Color(0xFF1C1F24),
+    separator = Color(0xFF2A2F36),
+    label = Color(0xFFE9ECF1),
+    secondaryLabel = Color(0x99A5ACB8),
+    tertiaryLabel = Color(0x4DA5ACB8),
+    fill = Color(0x1FA5ACB8),
     accent = Color(0xFF22D3EE),
-    green = Color(0xFF30D158),
-    amber = Color(0xFFFFD60A),
-    red = Color(0xFFFF453A),
+    green = Color(0xFF34D399),
+    amber = Color(0xFFFBBF24),
+    red = Color(0xFFF87171),
 )
 
 @Composable
@@ -117,18 +119,79 @@ fun IosSectionHeader(text: String) {
     )
 }
 
-/** 分组容器：白/深灰圆角卡，内部行之间用发丝线分隔。 */
+/** 分组容器：卡片圆角 + 内部行之间用发丝线分隔。 */
 @Composable
 fun IosSection(content: @Composable ColumnScope.() -> Unit) {
     val colors = iosColors()
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .padding(horizontal = 20.dp)
+            .clip(RoundedCornerShape(20.dp))
             .background(colors.card),
         content = content,
     )
+}
+
+/** 通用卡片容器：20dp 圆角、16dp 内边距、深色下带 1dp 细描边。 */
+@Composable
+fun IosCard(
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val colors = iosColors()
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(colors.card)
+            .border(1.dp, colors.separator, RoundedCornerShape(20.dp))
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+            .padding(16.dp),
+        content = content,
+    )
+}
+
+/** 统一进度条：6dp 圆角条形（全站唯一的进度样式）。 */
+@Composable
+fun IosBar(
+    progress: Float?,
+    color: Color,
+    modifier: Modifier = Modifier,
+    height: Dp = 6.dp,
+) {
+    val colors = iosColors()
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height)
+            .clip(RoundedCornerShape(height / 2))
+            .background(colors.fill),
+    ) {
+        if (progress != null && progress > 0f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(progress.coerceIn(0f, 1f))
+                    .height(height)
+                    .clip(RoundedCornerShape(height / 2))
+                    .background(color),
+            )
+        }
+    }
+}
+
+/** 状态胶囊（正常/已过期/未配置…）：小圆角、淡色底，克制不刺眼。 */
+@Composable
+fun IosStatusPill(text: String, tint: Color) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(tint.copy(alpha = 0.12f))
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+    ) {
+        Text(text, fontSize = 13.sp, color = tint)
+    }
 }
 
 /** 行之间的发丝分隔线（左侧内缩，iOS 惯例）。 */
