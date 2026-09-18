@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- 前景：TokenDock.ico 的位图版本（各密度 mipmap/ic_launcher_foreground） -->
-<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
-    android:src="@mipmap/ic_launcher_foreground"
-    android:gravity="center" />
