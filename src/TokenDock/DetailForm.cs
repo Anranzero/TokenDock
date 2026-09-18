@@ -35,6 +35,10 @@ internal sealed class DetailForm : Form
     private GlmState _glmState = new();
     private bool _overlayActive;
     private OverlaySubscription _overlaySubscription = OverlaySubscription.OpenCodeGo;
+    private ContextMenuStrip? _overlayMenu;
+    private readonly List<ToolStripMenuItem> _overlayMenuChoices = new();
+    private ToolStripMenuItem? _overlayMenuHide;
+    private ToolStripSeparator? _overlayMenuSeparator;
     private int _page;
     private int _busy;
     private bool _hideOnClose = true;
@@ -273,34 +277,43 @@ internal sealed class DetailForm : Form
             : "悬浮余量：选择订阅");
     }
 
-    /// <summary>图钉菜单：选择悬浮的订阅（当前项打勾），已开启时可关闭。</summary>
+    /// <summary>图钉菜单：选择悬浮的订阅（当前项打勾），已开启时可关闭。菜单只建一次复用，避免在 Closed 里释放导致点击处理访问已释放对象。</summary>
     private void ShowOverlayMenu()
     {
+        var menu = EnsureOverlayMenu();
+        for (var i = 0; i < _overlayMenuChoices.Count; i++)
+            _overlayMenuChoices[i].Checked = _overlayActive && (int)_overlaySubscription == i;
+        if (_overlayMenuHide is not null) _overlayMenuHide.Visible = _overlayActive;
+        if (_overlayMenuSeparator is not null) _overlayMenuSeparator.Visible = _overlayActive;
+        TrayMenuTheme.Refresh(menu); // 常驻实例：每次打开重取当前主题色
+        menu.Show(_btnOverlay, new Point(-UiTheme.Px(48), _btnOverlay.Height + UiTheme.Px(4)));
+    }
+
+    private ContextMenuStrip EnsureOverlayMenu()
+    {
+        if (_overlayMenu is not null) return _overlayMenu;
+
         var menu = new ContextMenuStrip();
         menu.Items.Add(new ToolStripMenuItem("悬浮显示") { Enabled = false });
         var names = new[] { "OpenCode Go", "Codex", "GLM" };
         for (var i = 0; i < names.Length; i++)
         {
             var index = i;
-            var item = new ToolStripMenuItem(names[i])
-            {
-                Checked = _overlayActive && (int)_overlaySubscription == index,
-            };
+            var item = new ToolStripMenuItem(names[i]);
             item.Click += (_, _) => OverlaySubscriptionRequested?.Invoke((OverlaySubscription)index);
+            _overlayMenuChoices.Add(item);
             menu.Items.Add(item);
         }
 
-        if (_overlayActive)
-        {
-            menu.Items.Add(new ToolStripSeparator());
-            var hide = new ToolStripMenuItem("关闭悬浮");
-            hide.Click += (_, _) => OverlayHideRequested?.Invoke();
-            menu.Items.Add(hide);
-        }
+        _overlayMenuSeparator = new ToolStripSeparator { Visible = false };
+        menu.Items.Add(_overlayMenuSeparator);
+        _overlayMenuHide = new ToolStripMenuItem("关闭悬浮") { Visible = false };
+        _overlayMenuHide.Click += (_, _) => OverlayHideRequested?.Invoke();
+        menu.Items.Add(_overlayMenuHide);
 
         TrayMenuTheme.Apply(menu);
-        menu.Closed += (_, _) => menu.Dispose();
-        menu.Show(_btnOverlay, new Point(-UiTheme.Px(48), _btnOverlay.Height + UiTheme.Px(4)));
+        _overlayMenu = menu;
+        return menu;
     }
 
     private static string OverlayName(OverlaySubscription subscription) => subscription switch
@@ -600,7 +613,10 @@ internal sealed class DetailForm : Form
     protected override void Dispose(bool disposing)
     {
         if (disposing)
+        {
             _tips.Dispose();
+            _overlayMenu?.Dispose();
+        }
         base.Dispose(disposing);
     }
 
