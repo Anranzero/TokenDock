@@ -152,6 +152,58 @@ public static class FloatingOverlayModel
     private static string N(double? value) => value?.ToString("0.##") ?? "—";
 }
 
+/// <summary>悬浮窗文本排版（纯函数，绘制与高度计算共用同一份逻辑）。</summary>
+internal static class OverlayTextLayout
+{
+    /// <summary>按字符折行：逐字符累加测量宽度，超出即换行。measure 注入以便单测。</summary>
+    public static IReadOnlyList<string> Wrap(string text, int width, Func<string, int> measure)
+    {
+        var lines = new List<string>();
+        var current = "";
+        foreach (var ch in text)
+        {
+            var candidate = current + ch;
+            if (current.Length > 0 && measure(candidate) > width)
+            {
+                lines.Add(current);
+                current = ch.ToString();
+            }
+            else
+            {
+                current = candidate;
+            }
+        }
+
+        if (current.Length > 0) lines.Add(current);
+        return lines;
+    }
+}
+
+/// <summary>悬浮窗初始摆放（纯函数，便于多显示器场景单测）。</summary>
+internal static class OverlayPlacement
+{
+    /// <summary>
+    /// 计算初始位置：有保存坐标时用保存坐标，否则主屏右下角（留 margin）；
+    /// 收敛目标是「保存坐标所在屏幕」的工作区；坐标已不在任何屏幕（显示器被移除）时回落主屏。
+    /// </summary>
+    public static Point ResolveInitialPlacement(
+        int savedX, int savedY, Size size, Rectangle primaryArea, Func<Point, Rectangle> areaOf, int margin)
+    {
+        var hasSaved = savedX >= 0 && savedY >= 0;
+        var target = hasSaved
+            ? new Point(savedX, savedY)
+            : new Point(primaryArea.Right - size.Width - margin, primaryArea.Bottom - size.Height - margin);
+
+        var area = areaOf(target);
+        if (!area.Contains(target))
+            area = primaryArea; // 该点不属于任何屏幕（例如副屏被拔掉）
+
+        return new Point(
+            Math.Clamp(target.X, area.Left, Math.Max(area.Left, area.Right - size.Width)),
+            Math.Clamp(target.Y, area.Top, Math.Max(area.Top, area.Bottom - size.Height)));
+    }
+}
+
 /// <summary>悬浮窗设置（非敏感，落盘 floating.json；重启恢复位置 / 订阅 / 透明度）。</summary>
 public sealed class FloatingOverlaySettings
 {
@@ -261,7 +313,8 @@ internal sealed class FloatingOverlayForm : Form
         TopMost = true;
 
         BuildMenu();
-        Appearance.Attach(this);
+        // manageOpacity:false —— 悬浮窗有自己的透明度设置，外观变化时不得覆盖
+        Appearance.Attach(this, manageOpacity: false);
         UiTheme.Changed += OnThemeChanged;
         Disposed += (_, _) => UiTheme.Changed -= OnThemeChanged;
     }
@@ -296,29 +349,20 @@ internal sealed class FloatingOverlayForm : Form
     /// <summary>测试探针：订阅菜单项（模拟真实右键点击路径）。</summary>
     internal ToolStripMenuItem SubscriptionMenuItemForTest(int index) => _subscriptionChoices[index];
 
-    /// <summary>按保存的位置显示（默认右下角，避开任务栏）；并应用主题窗口效果。</summary>
+    /// <summary>按保存的位置显示（默认主屏右下角）；多显示器时以保存坐标所在屏幕为准，显示器被移除才回落主屏。</summary>
     public void ShowAt(FloatingOverlaySettings settings)
     {
-        var area = Screen.PrimaryScreen!.WorkingArea;
+        var primary = Screen.PrimaryScreen!.WorkingArea;
         var size = CurrentSize();
-        if (settings.X >= 0 && settings.Y >= 0)
-            Location = new Point(settings.X, settings.Y);
-        else
-            Location = new Point(area.Right - size.Width - UiTheme.Px(24), area.Bottom - size.Height - UiTheme.Px(24));
-        ClampInto(area);
+        Location = OverlayPlacement.ResolveInitialPlacement(
+            settings.X, settings.Y, size, primary,
+            point => Screen.FromPoint(point).WorkingArea,
+            UiTheme.Px(24));
         Show();
         ApplyWindowEffects();
     }
 
-    /// <summary>把窗口收敛进指定工作区（多显示器以当前所在屏幕为准）。</summary>
-    private void ClampInto(Rectangle area)
-    {
-        Location = new Point(
-            Math.Clamp(Location.X, area.Left, Math.Max(area.Left, area.Right - Width)),
-            Math.Clamp(Location.Y, area.Top, Math.Max(area.Top, area.Bottom - Height)));
-    }
-
-    /// <summary>主题 / 毛玻璃变化：重绘并重设窗口效果。</summary>
+    /// <summary>主题 / 毛玻璃变化：重绘并重设窗口效果（使用悬浮窗自己的透明度）。</summary>
     private void OnThemeChanged()
     {
         if (IsDisposed) return;
@@ -361,17 +405,61 @@ internal sealed class FloatingOverlayForm : Form
     private Size CurrentSize()
     {
         var width = UiTheme.Px(_expanded ? 252 : 204);
-        int rows;
-        if (_expanded && _model.HasData)
+        var contentWidth = width - UiTheme.Px(24);
+
+        if (!_model.HasData)
         {
-            rows = _model.Rows.Count + _model.Details.Count;
-            var height = UiTheme.Px(24 /*标题*/ + rows * 16 + (_model.Countdown is null ? 0 : 16) + 20);
+            // 无数据：标题 + 折行后的提示文字
+            var hintLines = WrapLines(HintText(), contentWidth).Count;
+            return new Size(width, UiTheme.Px(30) + hintLines * UiTheme.Px(14) + UiTheme.Px(8));
+        }
+
+        if (_expanded)
+        {
+            // 展开：标题 + 折行后的全部行（与绘制共用同一份排版）
+            var lineCount = BuildExpandedLines(contentWidth).Count;
+            var height = UiTheme.Px(30) + lineCount * UiTheme.Px(16)
+                + (_model.Countdown is null ? 0 : UiTheme.Px(14)) + UiTheme.Px(8);
             return new Size(width, height);
         }
 
-        rows = Math.Min(_model.Rows.Count, 2);
+        var rows = Math.Min(_model.Rows.Count, 2);
         var compact = UiTheme.Px(24 + rows * 18 + (_model.Countdown is null ? 0 : 16) + 16);
         return new Size(width, compact);
+    }
+
+    /// <summary>测试探针：当前应使用的窗口尺寸（展开态需按折行补偿高度）。</summary>
+    internal Size CurrentSizeForTest => CurrentSize();
+
+    private static int MeasureTiny(string text) => TextRenderer.MeasureText(text, UiTheme.Tiny).Width;
+
+    private IReadOnlyList<string> WrapLines(string text, int contentWidth)
+        => OverlayTextLayout.Wrap(text, contentWidth, MeasureTiny);
+
+    private string HintText() => _model.Hint ?? "尚未获取数据";
+
+    /// <summary>
+    /// 展开态文本行（含折行）——高度计算与绘制共用同一份，
+    /// 避免"高度按单行算、绘制按折行画"导致底部被裁（Codex 长窗口名等场景）。
+    /// </summary>
+    private List<(string Text, Color Color)> BuildExpandedLines(int contentWidth)
+    {
+        var lines = new List<(string, Color)>();
+        foreach (var row in _model.Rows)
+        {
+            var text = row.Label + " " + (row.Percent is { } p ? DisplayFormat.FormatRemainingPercent(p) : "未知");
+            if (row.Countdown is not null) text += " · " + row.Countdown;
+            foreach (var line in WrapLines(text, contentWidth))
+                lines.Add((line, UiTheme.TextPrimary));
+        }
+
+        foreach (var detail in _model.Details)
+        {
+            foreach (var line in WrapLines(detail, contentWidth))
+                lines.Add((line, UiTheme.TextSecondary));
+        }
+
+        return lines;
     }
 
     private void Relayout()
@@ -575,7 +663,14 @@ internal sealed class FloatingOverlayForm : Form
 
         if (!_model.HasData)
         {
-            DrawWrapped(g, _model.Hint ?? "尚未获取数据", x, y, Width - UiTheme.Px(24));
+            // 无数据：提示文字同样按共用排版折行（高度已按行数计算）
+            foreach (var line in WrapLines(HintText(), Width - UiTheme.Px(24)))
+            {
+                TextRenderer.DrawText(g, line, UiTheme.Tiny, new Rectangle(x, y, Width - UiTheme.Px(24), UiTheme.Px(14)),
+                    UiTheme.TextSecondary, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
+                y += UiTheme.Px(14);
+            }
+
             return;
         }
 
@@ -622,19 +717,12 @@ internal sealed class FloatingOverlayForm : Form
             return;
         }
 
-        // 展开：全部行 + 详细信息
-        foreach (var row in _model.Rows)
+        // 展开：全部行 + 详细信息（与 CurrentSize 共用同一份折行排版）
+        foreach (var (line, color) in BuildExpandedLines(Width - UiTheme.Px(24)))
         {
-            var line = row.Label + " " + (row.Percent is { } p ? DisplayFormat.FormatRemainingPercent(p) : "未知");
-            if (row.Countdown is not null) line += " · " + row.Countdown;
-            TextRenderer.DrawText(g, line, UiTheme.Tiny, new Rectangle(x, y, Width - UiTheme.Px(24), UiTheme.Px(14)),
-                UiTheme.TextPrimary, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
+            TextRenderer.DrawText(g, line, UiTheme.Tiny, new Rectangle(x, y, Width - UiTheme.Px(24), UiTheme.Px(16)),
+                color, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
             y += UiTheme.Px(16);
-        }
-
-        foreach (var detail in _model.Details)
-        {
-            y = DrawWrapped(g, detail, x, y, Width - UiTheme.Px(24));
         }
 
         if (_model.Countdown is not null)
@@ -642,35 +730,6 @@ internal sealed class FloatingOverlayForm : Form
             TextRenderer.DrawText(g, _model.Countdown, UiTheme.Tiny, new Rectangle(x, y, Width - UiTheme.Px(24), UiTheme.Px(14)),
                 UiTheme.TextSecondary, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
         }
-    }
-
-    /// <summary>画一行可能过长的文字（按词折行），返回新的 y。</summary>
-    private int DrawWrapped(Graphics g, string text, int x, int y, int width)
-    {
-        var lines = new List<string>();
-        var current = "";
-        foreach (var ch in text)
-        {
-            if (TextRenderer.MeasureText(current + ch, UiTheme.Tiny).Width > width)
-            {
-                lines.Add(current);
-                current = ch.ToString();
-            }
-            else
-            {
-                current += ch;
-            }
-        }
-
-        if (current.Length > 0) lines.Add(current);
-        foreach (var line in lines)
-        {
-            TextRenderer.DrawText(g, line, UiTheme.Tiny, new Rectangle(x, y, width, UiTheme.Px(14)),
-                UiTheme.TextSecondary, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
-            y += UiTheme.Px(14);
-        }
-
-        return y;
     }
 
     private bool IsStaleSelected() => Subscription switch

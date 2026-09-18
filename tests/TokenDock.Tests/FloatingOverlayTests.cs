@@ -254,4 +254,99 @@ public class FloatingOverlayTests
         form.SetStates(op, codex, glm);
         Assert.Equal("GLM", form.CurrentModel.Title);
     }
+
+    // ---- 自审修复项的回归测试：多显示器 / 透明度归属 / 折行高度 ----
+
+    [Fact]
+    public void Placement_KeepsSavedPositionOnSecondaryMonitor()
+    {
+        var primary = new Rectangle(0, 0, 1920, 1040);
+        var secondary = new Rectangle(1920, 0, 2560, 1400);
+        Rectangle AreaOf(Point p) => p.X >= secondary.Left ? secondary : primary;
+
+        var location = OverlayPlacement.ResolveInitialPlacement(2500, 300, new Size(204, 96), primary, AreaOf, 24);
+        Assert.Equal(2500, location.X); // 保持在副屏，不被拉回主屏
+        Assert.Equal(300, location.Y);
+    }
+
+    [Fact]
+    public void Placement_FallsBackToPrimary_WhenSavedPointHasNoScreen()
+    {
+        var primary = new Rectangle(0, 0, 1920, 1040);
+        // Screen.FromPoint 返回"最近的屏幕"；副屏被拔掉时，该点已不落在任何屏幕内
+        Rectangle AreaOf(Point p) => primary;
+
+        var location = OverlayPlacement.ResolveInitialPlacement(2500, 300, new Size(204, 96), primary, AreaOf, 24);
+        Assert.True(primary.Contains(location), "显示器移除后应收敛回主屏");
+    }
+
+    [Fact]
+    public void Placement_Default_IsPrimaryBottomRightWithMargin()
+    {
+        var primary = new Rectangle(0, 0, 1920, 1040);
+        var location = OverlayPlacement.ResolveInitialPlacement(-1, -1, new Size(204, 96), primary, _ => primary, 24);
+        Assert.Equal(1920 - 204 - 24, location.X);
+        Assert.Equal(1040 - 96 - 24, location.Y);
+    }
+
+    [Fact]
+    public void Wrap_SplitsByMeasuredWidth()
+    {
+        var lines = OverlayTextLayout.Wrap("ABCDEFGHIJ", 30, s => s.Length * 10);
+        Assert.Equal(new[] { "ABC", "DEF", "GHI", "J" }, lines);
+        Assert.Empty(OverlayTextLayout.Wrap("", 30, s => s.Length * 10));
+    }
+
+    [Fact]
+    public void AppearanceChange_DoesNotClobberOverlayOpacity()
+    {
+        UiTheme.Init(1f);
+        var original = Appearance.Current.Theme;
+        try
+        {
+            using var form = new FloatingOverlayForm(new FloatingOverlaySettings { Opacity = 0.75 });
+            _ = form.Handle; // 建立句柄，让外观应用路径真正执行
+            Assert.Equal(0.75, form.Opacity, 2);
+
+            Appearance.ApplyForTest(s => s.Theme = original == ThemeChoice.Dark ? ThemeChoice.Light : ThemeChoice.Dark);
+            Assert.Equal(0.75, form.Opacity, 2); // 外观变化不得覆盖悬浮窗自身透明度
+        }
+        finally
+        {
+            Appearance.ApplyForTest(s => s.Theme = original);
+        }
+    }
+
+    [Fact]
+    public void ExpandedSize_CompensatesWrappedLines()
+    {
+        UiTheme.Init(1f);
+        // 构造一条必然折行的明细（未知类型 → 原样显示长 type 文本）
+        var state = new GlmState();
+        state.Apply(GlmFetchResult.Ok(new GlmUsageData
+        {
+            Provider = GlmProvider.BigModel,
+            Limits = new[]
+            {
+                new GlmQuotaLimit
+                {
+                    Type = "EXTREMELY_LONG_LIMIT_TYPE_NAME_FOR_WRAPPING_TEST",
+                    Unit = 9, Usage = 1000, Remaining = 864, Percentage = 13.6,
+                    NextResetTime = DateTimeOffset.UtcNow.AddDays(3),
+                },
+            },
+            TotalTokens = 1_234_567,
+        }));
+
+        using var form = new FloatingOverlayForm(new FloatingOverlaySettings { Subscription = OverlaySubscription.Glm, Opacity = 1.0 });
+        form.SetStates(null, null, state);
+        form.PreviewSetExpanded(true);
+
+        var model = form.CurrentModel;
+        var singleLineAssumption = UiTheme.Px(30)
+            + (model.Rows.Count + model.Details.Count) * UiTheme.Px(16)
+            + (model.Countdown is null ? 0 : UiTheme.Px(14)) + UiTheme.Px(8);
+        Assert.True(form.CurrentSizeForTest.Height > singleLineAssumption,
+            "展开高度未按折行补偿（长行会被裁切）");
+    }
 }

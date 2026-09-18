@@ -112,6 +112,9 @@ internal static class Appearance
 {
     private static readonly List<Form> AttachedForms = new();
 
+    /// <summary>自带透明度语义的窗口（如悬浮窗）：外观变化时不覆盖其 Opacity。</summary>
+    private static readonly HashSet<Form> UnmanagedOpacityForms = new();
+
     /// <summary>外观变化（主题 / 效果 / 透明度 / 动画任一改变）。控件据此重绘。</summary>
     public static event Action? Changed;
 
@@ -137,6 +140,14 @@ internal static class Appearance
         Apply(persist: true);
     }
 
+    /// <summary>测试用：修改设置并即时应用，但不落盘（避免影响真实 settings.json）。</summary>
+    internal static void ApplyForTest(Action<AppearanceSettings> mutate)
+    {
+        mutate(Current);
+        Current.GlassOpacity = AppearanceSettings.ClampOpacity(Current.GlassOpacity);
+        Apply(persist: false);
+    }
+
     /// <summary>定时器调用：跟随系统模式下感知系统主题切换（其他模式为无操作）。</summary>
     public static void RefreshSystemTheme()
     {
@@ -146,14 +157,20 @@ internal static class Appearance
         Apply(persist: false);
     }
 
-    /// <summary>把窗口纳入外观管理（构造时调用）：设置背景色并应用窗口效果。</summary>
-    public static void Attach(Form form)
+    /// <summary>
+    /// 把窗口纳入外观管理（构造时调用）：设置背景色并应用窗口效果。
+    /// manageOpacity=false 用于自带透明度语义的窗口（如悬浮窗），外观变化时不覆盖其 Opacity。
+    /// </summary>
+    public static void Attach(Form form, bool manageOpacity = true)
     {
         if (!AttachedForms.Contains(form))
             AttachedForms.Add(form);
+        if (!manageOpacity)
+            UnmanagedOpacityForms.Add(form);
         void OnDisposed(object? sender, EventArgs e)
         {
             AttachedForms.Remove(form);
+            UnmanagedOpacityForms.Remove(form);
             Changed -= OnAppearanceChanged;
         }
 
@@ -177,8 +194,10 @@ internal static class Appearance
         try
         {
             if (!form.IsHandleCreated) return;
-            form.Opacity = IsGlass ? Current.GlassOpacity : 1.0;
-            WindowEffects.Apply(form.Handle, IsGlass, Current.GlassOpacity, IsDark);
+            // 自带透明度语义的窗口（悬浮窗）不覆盖其 Opacity，只同步模糊与标题栏
+            if (!UnmanagedOpacityForms.Contains(form))
+                form.Opacity = IsGlass ? Current.GlassOpacity : 1.0;
+            WindowEffects.Apply(form.Handle, IsGlass, form.Opacity, IsDark);
         }
         catch (Exception)
         {
