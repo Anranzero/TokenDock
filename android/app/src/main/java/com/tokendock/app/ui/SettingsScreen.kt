@@ -271,9 +271,8 @@ fun SettingsScreen(
         // ---- 数据来源 ----
         IosSectionHeader("数据来源")
         IosFooter(
-            "额度数据仅来自官方接口 GET https://opencode.ai/zen/go/v1/usage（使用你的 API Key 鉴权，账号级数据与官网一致）。\n\n" +
-                "本应用不读取也不上传任何本机其他数据；Token 明细官方暂未提供，因此不做展示，也不会按剩余百分比反推。\n\n" +
-                "后续版本可能提供「连接 TokenDock 桌面端同步本机 Token 统计」的可选功能，当前版本不含任何后端服务。",
+            "额度数据仅来自官方接口 GET https://opencode.ai/zen/go/v1/usage，使用你的 API Key 鉴权，账号级数据与官网一致。\n\n" +
+                "本应用不读取、不上传任何本机其他数据；Token 明细官方未提供，因此不做展示，也不按剩余百分比反推。",
         )
 
         Spacer(Modifier.height(40.dp))

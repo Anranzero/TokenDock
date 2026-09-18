@@ -22,7 +22,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
-import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
@@ -122,7 +121,6 @@ fun HomeScreen(
                 QuotaCard("本月用量", "monthly", data.monthly, state, colors)
             }
 
-            TokenStatsCard(colors)
             Spacer(Modifier.height(20.dp))
         }
     }
@@ -295,56 +293,6 @@ private fun DetailLine(label: String, value: String, colors: IosColors) {
     Row(Modifier.padding(vertical = 3.dp)) {
         Text(label, fontSize = 13.sp, color = colors.tertiaryLabel, modifier = Modifier.width(84.dp))
         Text(value, fontSize = 13.sp, color = colors.secondaryLabel)
-    }
-}
-
-// ---------- 本机 Token 统计：功能卡 + 优雅空状态 ----------
-
-@Composable
-private fun TokenStatsCard(colors: IosColors) {
-    var expanded by remember { mutableStateOf(false) }
-
-    IosCard(onClick = { expanded = !expanded }) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .background(colors.fill, RoundedCornerShape(10.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Outlined.Insights, contentDescription = null, tint = colors.accent, modifier = Modifier.size(20.dp))
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text("本机 Token 统计", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = colors.label)
-                Spacer(Modifier.height(2.dp))
-                Text("官方暂未提供账号级明细", fontSize = 13.sp, color = colors.secondaryLabel)
-            }
-            Icon(
-                if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                contentDescription = null,
-                tint = colors.tertiaryLabel,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-
-        AnimatedVisibility(visible = expanded) {
-            Column {
-                Spacer(Modifier.height(12.dp))
-                IosSeparator(startInset = 0.dp)
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    "Android 端无法读取电脑上 OpenCode / Zcode 的本地数据库；官方额度接口目前只返回百分比，" +
-                        "因此这里不展示 Token 数，也不会按剩余百分比反推。",
-                    fontSize = 13.sp,
-                    color = colors.secondaryLabel,
-                )
-                Spacer(Modifier.height(10.dp))
-                DetailLine("来源", "OpenCode / Zcode 客户端（桌面端）", colors)
-                DetailLine("采集时间", "未连接", colors)
-                DetailLine("同步状态", "桌面端同步功能规划中", colors)
-            }
-        }
     }
 }
 
