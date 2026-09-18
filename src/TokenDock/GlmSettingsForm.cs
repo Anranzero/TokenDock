@@ -167,7 +167,7 @@ internal sealed class GlmSettingsForm : Form
         {
             Text = "打开密钥管理页",
             Size = new Size(UiTheme.Px(120), UiTheme.Px(20)),
-            Location = new Point(UiTheme.Px(24), UiTheme.Px(176)),
+            Location = new Point(UiTheme.Px(24), UiTheme.Px(180)),
         };
         _link.Click += (_, _) =>
         {
@@ -204,9 +204,10 @@ internal sealed class GlmSettingsForm : Form
 
         _keyInput.Controls.Add(_txtKey);
         _keyInput.Controls.Add(_eye);
+        // 注意：_eye 只挂在输入框里——若同时加入窗体 Controls 会被 WinForms 挪走（曾导致眼睛飘到窗体顶部）
         Controls.AddRange(new Control[]
         {
-            title, providerCaption, _providerChoice, keyCaption, _keyInput, _eye,
+            title, providerCaption, _providerChoice, keyCaption, _keyInput,
             _hint, _link, note, _btnSave, _btnCancel,
         });
 
@@ -224,8 +225,8 @@ internal sealed class GlmSettingsForm : Form
         _txtKey.UseSystemPasswordChar = true;
         _eye.Revealed = false;
         _hint.Text = $"{GlmEndpoints.DisplayName(_provider)} · Base URL：{GlmEndpoints.BaseUrl(_provider)}\r\n"
-            + $"密钥管理页：{GlmEndpoints.ApiKeyHelpUrl(_provider)}"
-            + (SecureKeyStore.HasGlmKey(_provider) ? "（已保存密钥，可留空沿用）" : "");
+            + (SecureKeyStore.HasGlmKey(_provider) ? "已保存密钥，可留空沿用；" : "")
+            + "密钥管理页见下方链接。";
     }
 
     protected override void OnShown(EventArgs e)

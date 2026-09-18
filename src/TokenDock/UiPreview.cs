@@ -74,6 +74,7 @@ internal static class UiPreview
                 okForm.ExpandLocalForPreview();
                 Shot(okForm, $"detail-ok-{preset}-{tag}.png");
                 Shot(new SettingsForm(new UsageApiClient(), null), $"settings-{preset}-{tag}.png");
+                Shot(new GlmSettingsForm(new GlmUsageClient()), $"glm-settings-{preset}-{tag}.png");
 
                 var codexForm = new DetailForm(fresh, () => { }, () => { });
                 codexForm.ShowCodexPageForPreview(CodexSampleReady());
